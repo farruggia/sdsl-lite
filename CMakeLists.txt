@@ -104,5 +104,3 @@ ADD_CUSTOM_TARGET(uninstall-sdsl
   "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/CMakeModules/cmake_uninstall.cmake")
 
 target_include_directories(sdsl PUBLIC include)
-
-add_subdirectory(test)
