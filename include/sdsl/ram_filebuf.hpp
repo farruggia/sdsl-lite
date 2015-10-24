@@ -28,9 +28,15 @@ class ram_filebuf : public std::streambuf
         ram_filebuf*
         close();
 
+#if (__cplusplus >= 201103L)
         pos_type
         seekpos(pos_type sp,
                 std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override;
+#else
+        pos_type
+        seekpos(pos_type sp,
+                std::ios_base::openmode which = std::ios_base::in | std::ios_base::out);
+#endif
 
         pos_type
         pubseekoff(off_type off, std::ios_base::seekdir way,
