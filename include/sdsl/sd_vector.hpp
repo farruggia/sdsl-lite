@@ -145,7 +145,7 @@ class sd_vector
         typedef select_support_sd<1, t_hi_bit_vector, select_1_support_type, select_0_support_type> select_1_type;
 
         typedef t_hi_bit_vector hi_bit_vector_type;
-    private:
+    protected:
         // we need this variables to represent the m ones of the original bit vector of size n
         size_type m_size = 0;  // length of the original bit vector
         uint8_t   m_wl   = 0;  // log n - log m, where n is the length of the original bit vector
