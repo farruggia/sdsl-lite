@@ -89,6 +89,227 @@ class int_vector_const_iterator;
 template<uint8_t t_width,std::ios_base::openmode t_mode>
 class int_vector_mapper;
 
+//! reference and iterator for vectors holding 2 or 4 bytes
+template <size_t bits>
+class fractional_reference {
+public:
+  using value_type = std::uint8_t;
+private:
+  std::uint8_t *ptr;
+  size_t displ;
+  value_type value;
+  static constexpr size_t mask = (1UL << bits) - 1UL;
+
+public:  
+  fractional_reference(std::uint8_t *ptr, size_t displ)
+    : ptr(ptr), displ(displ)
+  {
+    value = ((*ptr) >> displ) & mask;    
+  }
+
+  operator value_type()
+  {
+    return value;
+  }
+
+  fractional_reference &operator=(std::uint8_t to_write)
+  {
+    assert(to_write <= mask);
+    std::uint8_t &ref = *ptr;
+    auto clear_mask = ~(mask << displ);
+    ref   &= clear_mask;            // clear bits to be overwritten
+    ref   |= (to_write << displ);   // write value in place
+    value  = to_write;
+    return *this;
+  }
+};
+
+// Dereference
+template <size_t bits>
+struct dereference {
+  using reference   = fractional_reference<bits>;
+  using value_type  = typename reference::value_type;
+  reference operator()(std::uint8_t *ptr, size_t displacement) const
+  {
+    return reference(ptr, displacement);
+  }
+};
+
+template <size_t bits>
+struct const_dereference {
+  using reference   = std::uint8_t;
+  using value_type  = reference;
+
+  reference operator()(std::uint8_t *ptr, size_t displacement) const
+  {
+    return fractional_reference<bits>(ptr, displacement);
+  }
+};
+
+
+template<typename dereference, size_t bits>
+class base_fractional_iterator :
+    public std::iterator<
+      std::random_access_iterator_tag, 
+      typename dereference::value_type,
+      std::ptrdiff_t,
+      typename dereference::reference*,
+      typename dereference::reference>
+{
+private:
+  static_assert(bits == 2 || bits == 4, "Number of bits should be either 2 or 4");
+  static constexpr size_t idx_shift = 4UL / bits;
+  static constexpr size_t mask      = 0x7UL;
+  std::uint8_t *ptr;
+  size_t displ;
+  dereference der;
+public:
+  using iterator        = base_fractional_iterator<dereference, bits>;
+  using reference       = typename dereference::reference;
+  using value_type      = typename dereference::value_type;
+  using pointer         = reference*;
+  using size_type       = int_vector_size_type;
+  using difference_type = ptrdiff_t;
+
+  base_fractional_iterator(std::uint8_t *begin, difference_type idx)
+    : ptr(begin + (idx >> idx_shift)), displ(8 + ((idx * bits) & 0x7))
+  {
+    if (displ < 8UL) { 
+      --ptr;
+    }
+    displ &= mask;
+  }
+
+  reference operator*() const
+  {
+    return der(ptr, displ);
+  }
+
+  //! Prefix increment of the Iterator
+  iterator& operator++()
+  {
+    displ += bits;
+    ptr   += (displ >> 3);
+    displ &= mask;
+    return *this;
+  }
+
+  //! Postfix increment of the Iterator
+  iterator operator++(int)
+  {
+    auto it = *this;
+    ++(*this);
+    return it;
+  }
+
+  //! Prefix decrement of the Iterator
+  iterator& operator--()
+  {
+    if (displ == 0) {
+      --ptr;
+      displ = 8UL;
+    }
+    displ -= bits;
+    return *this;
+  }
+
+  //! Postfix decrement of the Iterator
+  iterator operator--(int)
+  {
+      auto it = *this;
+      --(*this);
+      return it;
+  }
+
+  iterator& operator+=(difference_type i)
+  {
+    iterator diff { ptr, i };
+    ptr    = diff.ptr;
+    displ += diff.displ;
+    ptr   += displ >> 3;
+    displ &= mask;
+    return *this;
+  }
+
+  iterator& operator-=(difference_type i)
+  {
+    (*this) += (-i);
+    return *this;
+  }
+
+  iterator& operator=(const iterator& it) = default;
+
+  iterator operator+(difference_type i) const
+  {
+      iterator it = *this;
+      return it += i;
+  }
+
+  iterator operator-(difference_type i) const
+  {
+      iterator it = *this;
+      return it -= i;
+  }
+
+  reference operator[](difference_type i) const
+  {
+      return *(*this + i);
+  }
+
+  bool operator==(const iterator& it) const
+  {
+      return it.ptr == ptr && it.displ == displ;
+  }
+
+  bool operator!=(const iterator& it) const
+  {
+      return !(*this==it);
+  }
+
+  bool operator<(const iterator& it) const
+  {
+    if (ptr == it.ptr) {
+      return displ < it.displ;
+    }
+    return ptr < it.ptr;
+  }
+
+  bool operator>(const iterator& it) const
+  {
+    if (ptr == it.ptr) {
+      return displ > it.displ;
+    }
+    return ptr > it.ptr;
+  }
+
+  bool operator>=(const iterator& it) const
+  {
+      return !(*this < it);
+  }
+
+  bool operator<=(const iterator& it) const
+  {
+      return !(*this > it);
+  }
+
+  difference_type operator-(const iterator& it)
+  {
+    int i_displ  = displ;
+    int oi_displ = it.displ;
+    long i_bits  = bits;
+    auto min_ptr = ptr < it.ptr ? ptr : it.ptr;
+    auto run_a   = ((ptr - min_ptr) << idx_shift) + i_displ / i_bits;
+    auto run_b   = ((it.ptr - min_ptr) << idx_shift) + oi_displ / i_bits;
+    return run_a - run_b;
+  }
+};
+
+template<size_t bits>
+using fractional_iterator = base_fractional_iterator<dereference<bits>, bits>;
+
+template<size_t bits>
+using fractional_const_iterator = base_fractional_iterator<const_dereference<bits>, bits>;
+
 template<uint8_t b, uint8_t t_patter_len>  // forward declaration
 class rank_support_v;
 
@@ -270,6 +491,66 @@ struct int_vector_trait<8> {
     static const_iterator end(const int_vector_type*, const uint64_t* begin, int_vector_size_type size)
     {
         return ((uint8_t*)begin)+size;
+    }
+
+    static void set_width(uint8_t, int_width_type) {}
+};
+
+template<>
+struct int_vector_trait<4> {
+    typedef uint8_t                                       value_type;
+    typedef int_vector<4>                                 int_vector_type;
+    typedef fractional_reference<4>                       reference;
+    typedef const uint8_t                                 const_reference;
+    typedef const uint8_t                                 int_width_type;
+    typedef fractional_iterator<4>       iterator;
+    typedef fractional_const_iterator<4> const_iterator;
+
+    static iterator begin(int_vector_type*, uint64_t* begin)
+    {
+        return iterator((uint8_t*)begin, 0);
+    }
+    static iterator end(int_vector_type*, uint64_t* begin, int_vector_size_type size)
+    {
+        return iterator(((uint8_t*)begin), size);
+    }
+    static const_iterator begin(const int_vector_type*, const uint64_t* begin)
+    {
+        return const_iterator(((uint8_t*)begin), 0);
+    }
+    static const_iterator end(const int_vector_type*, const uint64_t* begin, int_vector_size_type size)
+    {
+        return const_iterator(((uint8_t*)begin), size);
+    }
+
+    static void set_width(uint8_t, int_width_type) {}
+};
+
+template<>
+struct int_vector_trait<2> {
+    typedef uint8_t                                       value_type;
+    typedef int_vector<2>                                 int_vector_type;
+    typedef fractional_reference<2>                       reference;
+    typedef const uint8_t                                 const_reference;
+    typedef const uint8_t                                 int_width_type;
+    typedef fractional_iterator<2>       iterator;
+    typedef fractional_const_iterator<2> const_iterator;
+
+    static iterator begin(int_vector_type*, uint64_t* begin)
+    {
+        return iterator((uint8_t*)begin, 0);
+    }
+    static iterator end(int_vector_type*, uint64_t* begin, int_vector_size_type size)
+    {
+        return iterator(((uint8_t*)begin), size);
+    }
+    static const_iterator begin(const int_vector_type*, const uint64_t* begin)
+    {
+        return const_iterator(((uint8_t*)begin), 0);
+    }
+    static const_iterator end(const int_vector_type*, const uint64_t* begin, int_vector_size_type size)
+    {
+        return const_iterator(((uint8_t*)begin), size);
     }
 
     static void set_width(uint8_t, int_width_type) {}
@@ -1381,6 +1662,20 @@ inline auto int_vector<8>::operator[](const size_type& idx) -> reference {
     return *(((uint8_t*)(this->m_data))+idx);
 }
 
+// specialized [] operator for 4 bit access.
+template<>
+inline auto int_vector<4>::operator[](const size_type& idx) -> reference {
+    assert(idx < this->size());
+    return *iterator(reinterpret_cast<uint8_t*>(this->m_data), idx);
+}
+
+// specialized [] operator for 2 bit access.
+template<>
+inline auto int_vector<2>::operator[](const size_type& idx) -> reference {
+    assert(idx < this->size());
+    return *iterator(reinterpret_cast<uint8_t*>(this->m_data), idx);
+}
+
 template<uint8_t t_width>
 inline auto
 int_vector<t_width>::operator[](const size_type& idx)const -> const_reference
@@ -1428,6 +1723,22 @@ int_vector<8>::operator[](const size_type& idx)const -> const_reference
     assert(idx < this->size());
     return *(((uint8_t*)this->m_data)+idx);
 }
+
+template<>
+inline auto
+int_vector<4>::operator[](const size_type& idx) const -> const_reference {
+    assert(idx < this->size());
+    return *const_iterator(reinterpret_cast<uint8_t*>(this->m_data), idx);
+}
+
+// specialized [] operator for 2 bit access.
+template<>
+inline auto
+int_vector<2>::operator[](const size_type& idx) const -> const_reference {
+    assert(idx < this->size());
+    return *const_iterator(reinterpret_cast<uint8_t*>(this->m_data), idx);
+}
+
 
 template<>
 inline auto
