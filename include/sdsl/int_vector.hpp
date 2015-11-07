@@ -107,7 +107,7 @@ public:
     value = ((*ptr) >> displ) & mask;    
   }
 
-  operator value_type()
+  operator value_type() const
   {
     return value;
   }
@@ -253,12 +253,12 @@ public:
 
   reference operator[](difference_type i) const
   {
-      return *(*this + i);
+    return *(*this + i);
   }
 
   bool operator==(const iterator& it) const
   {
-      return it.ptr == ptr && it.displ == displ;
+    return it.ptr == ptr and it.displ == displ;
   }
 
   bool operator!=(const iterator& it) const
@@ -292,7 +292,7 @@ public:
       return !(*this > it);
   }
 
-  difference_type operator-(const iterator& it)
+  difference_type operator-(const iterator& it) const
   {
     int i_displ  = displ;
     int oi_displ = it.displ;
@@ -303,6 +303,13 @@ public:
     return run_a - run_b;
   }
 };
+
+template<typename dereference, size_t bits>
+inline base_fractional_iterator<dereference, bits> operator+(typename base_fractional_iterator<dereference, bits>::difference_type n, const base_fractional_iterator<dereference, bits>& it)
+{
+    return it + n;
+}
+
 
 template<size_t bits>
 using fractional_iterator = base_fractional_iterator<dereference<bits>, bits>;
@@ -498,13 +505,13 @@ struct int_vector_trait<8> {
 
 template<>
 struct int_vector_trait<4> {
-    typedef uint8_t                                       value_type;
-    typedef int_vector<4>                                 int_vector_type;
-    typedef fractional_reference<4>                       reference;
-    typedef const uint8_t                                 const_reference;
-    typedef const uint8_t                                 int_width_type;
-    typedef fractional_iterator<4>       iterator;
-    typedef fractional_const_iterator<4> const_iterator;
+    typedef uint8_t                        value_type;
+    typedef int_vector<4>                  int_vector_type;
+    typedef fractional_reference<4>        reference;
+    typedef const uint8_t                  const_reference;
+    typedef const uint8_t                  int_width_type;
+    typedef fractional_iterator<4>         iterator;
+    typedef fractional_const_iterator<4>   const_iterator;
 
     static iterator begin(int_vector_type*, uint64_t* begin)
     {
@@ -577,7 +584,7 @@ class int_vector
         typedef typename int_vector_trait<t_width>::const_iterator  const_iterator;
         typedef typename int_vector_trait<t_width>::reference       reference;
         typedef typename int_vector_trait<t_width>::const_reference const_reference;
-        typedef int_vector_reference<int_vector>*                   pointer;
+        typedef typename std::remove_reference<reference>::type*    pointer;
         typedef const value_type*                                   const_pointer;
         typedef ptrdiff_t                                           difference_type;
         typedef int_vector_size_type                                size_type;
