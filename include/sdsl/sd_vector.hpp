@@ -281,6 +281,8 @@ class sd_vector
             builder = sd_vector_builder();
         }
 
+        bool is_empty() const { return m_low.empty(); }
+
         //! Accessing the i-th element of the original bit_vector
         /*! \param i An index i with \f$ 0 \leq i < size()  \f$.
         *   \return The i-th bit of the original bit_vector
@@ -293,6 +295,9 @@ class sd_vector
         */
         value_type operator[](size_type i)const
         {
+            if (is_empty()) {
+                return value_type{};
+            }
             size_type high_val = (i >> (m_wl));
             size_type sel_high = m_high_0_select(high_val + 1);
             size_type rank_low = sel_high - high_val;
@@ -319,6 +324,9 @@ class sd_vector
          */
         uint64_t get_int(size_type idx, const uint8_t len=64) const
         {
+            if (is_empty()) {
+                return 0UL;
+            }
             uint64_t i = idx+len-1;
             uint64_t high_val = (i >> (m_wl));
             uint64_t sel_high = m_high_0_select(high_val + 1);
@@ -487,6 +495,11 @@ class rank_support_sd
         size_type rank(size_type i)const
         {
             assert(m_v != nullptr);
+
+            if (m_v->is_empty()) {
+                return 0UL;
+            }
+
             assert(i <= m_v->size());
             // split problem in two parts:
             // (1) find  >=
